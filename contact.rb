@@ -1,85 +1,91 @@
-#test change
-require 'csv'
-contacts = CSV.read('contact_list.csv')
+require 'pg'
 
-# Represents a person in an address book.
-# The ContactList class will work with Contact objects instead of interacting with the CSV file directly
 class Contact
 
-  attr_accessor :name, :email
-  # Creates a new contact object
-  # @param name [String] The contact's name
-  # @param email [String] The contact's email address
-  def initialize(name, email)
-    # TODO: Assign parameter values to instance variables.
-    @name = name
-    @email = email
+  attr_accessor :id, :name, :email
+
+  #Connects to postgres db 'contacts'
+  def self.conn
+    PG.connect( dbname: 'contacts')
   end
 
-  # Provides functionality for managing contacts in the csv file.
-  class << self
-    # Opens 'contacts.csv' and creates a Contact object for each line in the file (aka each contact).
-    # @return [Array<Contact>] Array of Contact objects
-    def list_all_contacts
-      # TODO: Return an Array of Contact instances made from the data in 'contacts.csv'.
-      return CSV.read('contact_list.csv')
+  def initialize(name, email)
+    self.name = name
+    self.email = email
+  end
+
+  #to print out nicely instead of having objects printed out < >
+  def to_s
+    "#{name}, #{email}, #{id}"
+  end
+
+  # Lists all the contacts in the data base
+  def self.list_all_contacts
+    conn.exec_params("SELECT * FROM contacts").map do |row|
+      contact = Contact.new(row['name'], row['email'])
+      contact.id = row['id']
+      contact
     end
+  end
     # Creates a new contact, adding it to the csv file, returning the new contact.
     # @param name [String] the new contact's name
     # @param email [String] the contact's email
-    def create_new_contact(name, email)
-      # TODO: Instantiate a Contact, add its data to the 'contacts.csv' file, and return it
-      latest_id = provide_new_id
-      #add info to the CSV
-      CSV.open('contact_list.csv', 'a+') do |csv_object|
-        csv_object << [latest_id, name, email]
-      end
-      return "\nNew contact created: ID: #{latest_id}, Name: #{name}, email: #{email}"
-    end
-    
-    # Finds the  highest id on contact list
-    def provide_new_id
-      all_ids = []
-      #Adds all of the IDs into an array for further analysis
-      CSV.foreach('contact_list.csv') do |row|
-        all_ids << row[0].to_i
-      end
-      #Locates the highest ID
-      highest_id = all_ids.max
-      #puts "Checking the 'highest_id'"
-      #puts highest_id
-      new_id = highest_id + 1
-      return new_id
-    end
-    # Find the Contact in the 'contacts.csv' file with the matching id.
-    # @param id [Integer] the contact id
-    # @return [Contact, nil] the contact with the specified id. If no contact has the id, returns nil.
-    def find_contact_by_id(user_id) #searches for an ID
-      #Pulls out the ID number from the string.
-      csv_text = File.read('contact_list.csv')
-      csv = CSV.parse(csv_text)
-      if
-        csv.each do |row|
-          puts row if row[0] == user_id
-        end
+  def self.create_new_contact(name, email)
+    new_contact = Contact.new(name, email)
+    new_contact.save
+    new_contact
+  end
+  
+  # DO NOT NEED ANYMORE SINCE THE ID IS AUTOMATICALLY GENERATED
+  # Finds the  highest id on contact list
+  # def provide_new_id
+  #   all_ids = []
+  #   #Adds all of the IDs into an array for further analysis
+  #   CSV.foreach('contact_list.csv') do |row|
+  #     all_ids << row[0].to_i
+  #   end
+  #   #Locates the highest ID
+  #   highest_id = all_ids.max
+  #   #puts "Checking the 'highest_id'"
+  #   #puts highest_id
+  #   new_id = highest_id + 1
+  #   return new_id
+  # end
+  def self.find_contact_by_id(id)
+    res = conn.exec_params("SELECT * FROM contacts WHERE id=$1", [id])
+    return false if res.count == 0
+
+    contact = Contact.new(res[0]['name'], res[0]['email'])
+    contact.id = res[0]['id']
+    contact
+  end
+
+  #Searches contacts
+  def self.search_contacts(user_name_or_email)
+    res = conn.exec_params("SELECT * FROM contacts WHERE name LIKE $1 OR email LIKE $1", ['%'+user_name_or_email+'%'])
+    return false if res.count == 0
+
+    contact = Contact.new(res[0]['name'], res[0]['email'])
+    contact.id = res[0]['id']
+    contact
+  end
+
+  def self.persisted?(id)
+    !id.nil?
+  end
+
+  def self.save(id, name, email)
+    if persisted?(id)
+      new_contact = Contact.conn.exec_params("UPDATE contacts SET name=$1, email=$2 WHERE id=$3", [name, email, id])
+      if new_contact.result_status == 1
+        puts "Successfully updated: #{name}, #{email}, ID:#{id}"
       else
-        return nil
-      end
-    end
-    # Search for contacts by either name or email.
-    # @param term [String] the name fragment or email fragment to search for
-    # @return [Array<Contact>] Array of Contact objects.
-    def search_contacts(user_name_or_email)
-      # TODO: Select the Contact instances from the 'contacts.csv' file whose name or email attributes contain the search term.
-      csv_text = File.read('contact_list.csv')
-      csv = CSV.parse(csv_text)
-      if
-        csv.each do |row|
-          puts row if row[1].match(user_name_or_email) || row[2] == user_name_or_email
-        end
-      else
-        return nil
-      end
+        puts "Error updating record"
+      end 
+    else
+      rep = Contact.conn.exec_params("INSERT INTO contacts (name,email) VALUES ($1, $2) RETURNING id", [name, email])
+      self.id = rep[0]['id']
     end
   end
+
 end
