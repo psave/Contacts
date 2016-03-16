@@ -1,3 +1,4 @@
+# Git Active Record Branch
 require 'pg'
 # commment
 class Contact
