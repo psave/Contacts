@@ -27,11 +27,20 @@ class Contact
       contact
     end
   end
+
+  def self.enter_new_contact
+    puts "Enter the first and last name of your contact: i.e. Johnny Walker "
+    name = STDIN.gets.chomp
+    puts "Enter the e-mail of your contact: i.e. (johnnny.walker@jw.com)"
+    email = STDIN.gets.chomp
+    Contact.create_new_contact(name, email)
+  end
     # Creates a new contact, adding it to the csv file, returning the new contact.
     # @param name [String] the new contact's name
     # @param email [String] the contact's email
   def self.create_new_contact(name, email)
     new_contact = Contact.new(name, email)
+    # ~~~~~~ ~~~~~~~~~ ~~~~~~~ NoT able to create a new contact...
     new_contact.save
     new_contact
   end
@@ -70,13 +79,33 @@ class Contact
     contact
   end
 
-  def self.persisted?(id)
+  def self.update_contact(id)
+    #Escape if id does not exist
+    the_contact = Contact.find_contact_by_id(id)
+    puts "Here is the contact: #{the_contact}"
+    print "\nIs this the contact you would like to update? 'y' or 'n': "
+    yes_or_no = STDIN.gets.chomp
+    if yes_or_no == "n"
+      puts "Exiting program."
+    elsif yes_or_no == "y"
+      puts "What is the new name?"
+      name = STDIN.gets.chomp
+      puts "What is the new email?"
+      email = STDIN.gets.chomp
+      contact = Contact.new(name, email)
+      contact.id = id
+      contact.save
+    end
+  end
+
+  def persisted?(id)
     !id.nil?
   end
 
-  def self.save(id, name, email)
+  def save
     if persisted?(id)
       new_contact = Contact.conn.exec_params("UPDATE contacts SET name=$1, email=$2 WHERE id=$3", [name, email, id])
+      puts new_contact.class #check the class for the "result_status" below.
       if new_contact.result_status == 1
         puts "Successfully updated: #{name}, #{email}, ID:#{id}"
       else
@@ -86,6 +115,7 @@ class Contact
       rep = Contact.conn.exec_params("INSERT INTO contacts (name,email) VALUES ($1, $2) RETURNING id", [name, email])
       self.id = rep[0]['id']
     end
+    self
   end
 
 end
