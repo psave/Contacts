@@ -1,5 +1,5 @@
 require 'pg'
-
+# commment
 class Contact
 
   attr_accessor :id, :name, :email
